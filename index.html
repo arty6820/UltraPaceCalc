@@ -1,0 +1,1202 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950 text-slate-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>UltraPace - Ultramarathon Race Predictor</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Google Fonts (Inter & SF Pro fallback aesthetic) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        ios: {
+                            blue: '#0A84FF',
+                            green: '#30D158',
+                            red: '#FF453A',
+                            orange: '#FF9F0A',
+                            yellow: '#FFD60A',
+                            card: '#1C1C1E',
+                            subcard: '#2C2C2E',
+                            border: '#38383A',
+                            bg: '#000000',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* iOS-like smooth scrollbar & touch feel */
+        body {
+            font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+            -webkit-tap-highlight-color: transparent;
+            -webkit-font-smoothing: antialiased;
+        }
+        /* Custom scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1c1c1e;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #38383a;
+            border-radius: 9999px;
+        }
+        .glass-panel {
+            background: rgba(28, 28, 30, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white !important; color: black !important; }
+            .glass-panel { background: white !important; border: 1px solid #ccc !important; color: black !important; }
+            .text-white, .text-slate-100, .text-slate-200, .text-slate-300 { color: black !important; }
+            .bg-slate-900, .bg-slate-950, .bg-ios-card, .bg-ios-subcard { background: white !important; }
+            .border-slate-800, .border-ios-border { border-color: #ddd !important; }
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col font-sans selection:bg-ios-blue selection:text-white">
+
+    <!-- Top Sticky Header -->
+    <header class="sticky top-0 z-40 glass-panel border-b border-ios-border px-4 py-3 no-print">
+        <div class="max-w-6xl mx-auto flex items-center justify-between">
+            <div class="flex items-center space-x-2.5">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-ios-blue to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
+                    <i data-lucide="timer" class="w-5 h-5 text-white"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg leading-none tracking-tight text-white">UltraPace</h1>
+                    <p class="text-[11px] font-medium text-slate-400">Ultramarathon Outcome Predictor</p>
+                </div>
+            </div>
+
+            <!-- Distance Unit Switcher & Quick Actions -->
+            <div class="flex items-center space-x-2">
+                <div class="bg-ios-subcard p-0.5 rounded-lg flex border border-ios-border text-xs">
+                    <button id="unitMilesBtn" onclick="setUnit('mi')" class="px-2.5 py-1 rounded-md font-medium transition-all bg-ios-blue text-white shadow-sm">mi</button>
+                    <button id="unitKmBtn" onclick="setUnit('km')" class="px-2.5 py-1 rounded-md font-medium text-slate-400 hover:text-white transition-all">km</button>
+                </div>
+                <button onclick="window.print()" class="p-2 text-slate-400 hover:text-white bg-ios-subcard border border-ios-border rounded-lg transition" title="Print/Export PDF">
+                    <i data-lucide="printer" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-6xl w-full mx-auto p-3 sm:p-5 space-y-5">
+
+        <!-- Race Type Toggle & Presets -->
+        <section class="space-y-3 no-print">
+            <div class="bg-ios-card border border-ios-border p-1.5 rounded-2xl flex relative shadow-inner">
+                <button id="tabDistanceMode" onclick="setRaceMode('distance')" class="flex-1 py-2.5 text-xs sm:text-sm font-semibold rounded-xl transition-all duration-200 flex items-center justify-center gap-2 bg-ios-blue text-white shadow-md">
+                    <i data-lucide="route" class="w-4 h-4"></i>
+                    Distance-Based Race
+                </button>
+                <button id="tabTimeMode" onclick="setRaceMode('time')" class="flex-1 py-2.5 text-xs sm:text-sm font-semibold rounded-xl transition-all duration-200 flex items-center justify-center gap-2 text-slate-400 hover:text-white">
+                    <i data-lucide="clock" class="w-4 h-4"></i>
+                    Time-Based Race
+                </button>
+            </div>
+
+            <!-- Quick Preset Chips -->
+            <div class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
+                <span class="text-slate-400 font-medium text-[11px] uppercase tracking-wider pl-1 flex items-center gap-1">
+                    <i data-lucide="zap" class="w-3 h-3 text-ios-yellow"></i> Presets:
+                </span>
+                <div id="distancePresets" class="flex gap-1.5">
+                    <button onclick="applyPreset('50k')" class="px-3 py-1.5 rounded-full bg-ios-card border border-ios-border hover:border-slate-500 font-medium text-slate-300 transition shrink-0">50K</button>
+                    <button onclick="applyPreset('50m')" class="px-3 py-1.5 rounded-full bg-ios-card border border-ios-border hover:border-slate-500 font-medium text-slate-300 transition shrink-0">50 Miles</button>
+                    <button onclick="applyPreset('100k')" class="px-3 py-1.5 rounded-full bg-ios-card border border-ios-border hover:border-slate-500 font-medium text-slate-300 transition shrink-0">100K</button>
+                    <button onclick="applyPreset('100m')" class="px-3 py-1.5 rounded-full bg-ios-card border border-ios-border hover:border-slate-500 font-medium text-slate-300 transition shrink-0">100 Miles</button>
+                </div>
+                <div id="timePresets" class="hidden flex gap-1.5">
+                    <button onclick="applyPreset('6h')" class="px-3 py-1.5 rounded-full bg-ios-card border border-ios-border hover:border-slate-500 font-medium text-slate-300 transition shrink-0">6 Hours</button>
+                    <button onclick="applyPreset('12h')" class="px-3 py-1.5 rounded-full bg-ios-card border border-ios-border hover:border-slate-500 font-medium text-slate-300 transition shrink-0">12 Hours</button>
+                    <button onclick="applyPreset('24h')" class="px-3 py-1.5 rounded-full bg-ios-card border border-ios-border hover:border-slate-500 font-medium text-slate-300 transition shrink-0">24 Hours</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Dynamic Input Form Panel -->
+        <section class="bg-ios-card border border-ios-border rounded-2xl p-4 sm:p-6 shadow-xl no-print">
+            <h2 class="text-sm uppercase tracking-wider text-slate-400 font-semibold mb-4 flex items-center gap-2">
+                <i data-lucide="sliders" class="w-4 h-4 text-ios-blue"></i>
+                Race Parameters & Aid Setup
+            </h2>
+
+            <!-- DISTANCE MODE INPUTS -->
+            <div id="distanceInputs" class="space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <!-- Total Distance -->
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1">Total Distance (<span class="unitLabel">miles</span>)</label>
+                        <div class="relative">
+                            <input type="number" id="distTotal" value="100" step="0.1" min="1" class="w-full bg-ios-subcard border border-ios-border rounded-xl px-3.5 py-2.5 text-white font-semibold focus:outline-none focus:border-ios-blue transition">
+                            <span class="absolute right-3 top-2.5 text-xs text-slate-500 font-medium unitLabel">miles</span>
+                        </div>
+                    </div>
+                    <!-- Cutoff Time Limit -->
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1">Cutoff Time Limit</label>
+                        <div class="flex space-x-2">
+                            <div class="relative flex-1">
+                                <input type="number" id="distCutoffHours" value="30" min="0" class="w-full bg-ios-subcard border border-ios-border rounded-xl px-3 py-2.5 text-white font-semibold focus:outline-none focus:border-ios-blue transition">
+                                <span class="absolute right-2.5 top-2.5 text-xs text-slate-500 font-medium">h</span>
+                            </div>
+                            <div class="relative flex-1">
+                                <input type="number" id="distCutoffMins" value="0" min="0" max="59" class="w-full bg-ios-subcard border border-ios-border rounded-xl px-3 py-2.5 text-white font-semibold focus:outline-none focus:border-ios-blue transition">
+                                <span class="absolute right-2.5 top-2.5 text-xs text-slate-500 font-medium">m</span>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Target Running Pace -->
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1">Target Pace (per <span class="unitSingleLabel">mile</span>)</label>
+                        <div class="flex space-x-2">
+                            <div class="relative flex-1">
+                                <input type="number" id="distPaceMin" value="14" min="3" max="59" onchange="calculateRace()" class="w-full bg-ios-subcard border border-ios-border rounded-xl px-3 py-2.5 text-white font-semibold focus:outline-none focus:border-ios-blue transition">
+                                <span class="absolute right-2.5 top-2.5 text-xs text-slate-500 font-medium">min</span>
+                            </div>
+                            <div class="relative flex-1">
+                                <input type="number" id="distPaceSec" value="30" min="0" max="59" onchange="calculateRace()" class="w-full bg-ios-subcard border border-ios-border rounded-xl px-3 py-2.5 text-white font-semibold focus:outline-none focus:border-ios-blue transition">
+                                <span class="absolute right-2.5 top-2.5 text-xs text-slate-500 font-medium">sec</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Distance Aid Stations Section -->
+                <div class="pt-3 border-t border-ios-border">
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                        <label class="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                            <i data-lucide="tent" class="w-4 h-4 text-ios-green"></i>
+                            Aid Stations Builder
+                        </label>
+
+                        <!-- Generator trigger modal/controls -->
+                        <div class="flex items-center gap-2">
+                            <button onclick="openPresetModal()" class="text-xs bg-ios-subcard hover:bg-slate-800 border border-ios-border text-ios-blue font-medium px-2.5 py-1 rounded-lg transition flex items-center gap-1">
+                                <i data-lucide="sparkles" class="w-3.5 h-3.5"></i> Auto-Space Generator
+                            </button>
+                            <button onclick="addAidStation()" class="text-xs bg-ios-blue hover:bg-blue-600 text-white font-medium px-2.5 py-1 rounded-lg transition flex items-center gap-1">
+                                <i data-lucide="plus" class="w-3.5 h-3.5"></i> Add Aid Station
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Aid Stations Dynamic List Container -->
+                    <div id="aidStationsList" class="space-y-2 max-h-60 overflow-y-auto pr-1">
+                        <!-- Dynamically populated -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- TIME MODE INPUTS -->
+            <div id="timeInputs" class="hidden space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <!-- Race Duration -->
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1">Time Duration (Hours)</label>
+                        <div class="relative">
+                            <input type="number" id="timeDurationHours" value="12" step="0.5" min="1" onchange="calculateRace()" class="w-full bg-ios-subcard border border-ios-border rounded-xl px-3.5 py-2.5 text-white font-semibold focus:outline-none focus:border-ios-blue transition">
+                            <span class="absolute right-3 top-2.5 text-xs text-slate-500 font-medium">hrs</span>
+                        </div>
+                    </div>
+
+                    <!-- Loop Distance -->
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1">Loop Distance (<span class="unitLabel">miles</span>)</label>
+                        <div class="relative">
+                            <input type="number" id="timeLoopDist" value="3.5" step="0.1" min="0.1" onchange="calculateRace()" class="w-full bg-ios-subcard border border-ios-border rounded-xl px-3.5 py-2.5 text-white font-semibold focus:outline-none focus:border-ios-blue transition">
+                            <span class="absolute right-3 top-2.5 text-xs text-slate-500 font-medium unitLabel">miles</span>
+                        </div>
+                    </div>
+
+                    <!-- Rest Interval (Loops between aid stops) -->
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1">Loops per Aid Stop</label>
+                        <div class="relative">
+                            <input type="number" id="timeLoopsPerStop" value="2" min="1" step="1" onchange="calculateRace()" class="w-full bg-ios-subcard border border-ios-border rounded-xl px-3.5 py-2.5 text-white font-semibold focus:outline-none focus:border-ios-blue transition">
+                            <span class="absolute right-3 top-2.5 text-xs text-slate-500 font-medium">loops</span>
+                        </div>
+                    </div>
+
+                    <!-- Rest Duration -->
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1">Rest per Stop (Minutes)</label>
+                        <div class="relative">
+                            <input type="number" id="timeRestMins" value="5" min="0" step="1" onchange="calculateRace()" class="w-full bg-ios-subcard border border-ios-border rounded-xl px-3.5 py-2.5 text-white font-semibold focus:outline-none focus:border-ios-blue transition">
+                            <span class="absolute right-3 top-2.5 text-xs text-slate-500 font-medium">mins</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                    <!-- Target Running Pace -->
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1">Target Pace (per <span class="unitSingleLabel">mile</span>)</label>
+                        <div class="flex space-x-2">
+                            <div class="relative flex-1">
+                                <input type="number" id="timePaceMin" value="11" min="3" max="59" onchange="calculateRace()" class="w-full bg-ios-subcard border border-ios-border rounded-xl px-3 py-2.5 text-white font-semibold focus:outline-none focus:border-ios-blue transition">
+                                <span class="absolute right-2.5 top-2.5 text-xs text-slate-500 font-medium">min</span>
+                            </div>
+                            <div class="relative flex-1">
+                                <input type="number" id="timePaceSec" value="15" min="0" max="59" onchange="calculateRace()" class="w-full bg-ios-subcard border border-ios-border rounded-xl px-3 py-2.5 text-white font-semibold focus:outline-none focus:border-ios-blue transition">
+                                <span class="absolute right-2.5 top-2.5 text-xs text-slate-500 font-medium">sec</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Target Distance Goal (Optional) -->
+                    <div class="md:col-span-2">
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="block text-xs font-medium text-slate-300">Target Distance Goal (Optional)</label>
+                            <div class="flex gap-1.5 text-[10px]">
+                                <button type="button" onclick="setTargetDistGoal(50)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-ios-border">50 mi</button>
+                                <button type="button" onclick="setTargetDistGoal(62.13)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-ios-border">100K</button>
+                                <button type="button" onclick="setTargetDistGoal(100)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-ios-border">100 mi</button>
+                                <button type="button" onclick="setTargetDistGoal(0)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 border border-ios-border">Clear</button>
+                            </div>
+                        </div>
+                        <div class="relative">
+                            <input type="number" id="timeTargetDist" value="50" step="0.1" min="0" onchange="calculateRace()" placeholder="e.g. 50 or 100" class="w-full bg-ios-subcard border border-ios-border rounded-xl px-3.5 py-2.5 text-white font-semibold focus:outline-none focus:border-ios-blue transition">
+                            <span class="absolute right-3 top-2.5 text-xs text-slate-500 font-medium unitLabel">miles</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recalculate Trigger -->
+            <div class="mt-5 flex justify-end">
+                <button onclick="calculateRace()" class="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-ios-blue to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/25 transition active:scale-95 flex items-center justify-center gap-2">
+                    <i data-lucide="calculator" class="w-4 h-4"></i>
+                    Calculate Pacing & Outcome
+                </button>
+            </div>
+        </section>
+
+        <!-- RESULTS & REPORTS CONTAINER -->
+        <section id="resultsSection" class="space-y-4">
+            
+            <!-- Visual Overview & Cutoff Status Bar -->
+            <div id="overviewCard" class="bg-ios-card border border-ios-border rounded-2xl p-4 sm:p-5 shadow-xl relative overflow-hidden">
+                <!-- Dynamically filled with overall summary & warning banners -->
+            </div>
+
+            <!-- Mobile Display View Toggle (Side-by-Side vs Mobile Tabs) -->
+            <div class="flex items-center justify-between no-print">
+                <h3 class="text-xs uppercase tracking-wider text-slate-400 font-bold flex items-center gap-1.5">
+                    <i data-lucide="bar-chart-2" class="w-4 h-4 text-ios-blue"></i>
+                    Pacing Comparative Analysis
+                </h3>
+                
+                <!-- Mobile Tab Segmented Switch (Visible on mobile screens) -->
+                <div class="lg:hidden bg-ios-subcard border border-ios-border p-1 rounded-xl flex text-xs font-semibold">
+                    <button id="viewTabTarget" onclick="setColumnView('target')" class="px-3 py-1 rounded-lg bg-ios-blue text-white shadow">Target Pace</button>
+                    <button id="viewTabRequired" onclick="setColumnView('required')" class="px-3 py-1 rounded-lg text-slate-400">Required Pace</button>
+                </div>
+            </div>
+
+            <!-- Side-by-Side Dual Column Grid -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                
+                <!-- COLUMN 1: TARGET PACE SCENARIO -->
+                <div id="colTargetPace" class="bg-ios-card border border-ios-border rounded-2xl overflow-hidden shadow-xl flex flex-col">
+                    <!-- Column Header -->
+                    <div id="targetHeader" class="p-4 border-b border-ios-border bg-gradient-to-b from-slate-800/50 to-transparent">
+                        <!-- Populated by JS -->
+                    </div>
+
+                    <!-- Chart / Table Breakdown -->
+                    <div class="p-3 flex-1 overflow-x-auto">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr class="text-slate-400 font-semibold border-b border-ios-border pb-2">
+                                    <th class="py-2 px-2" id="thUnitCol1">Mile/Lap</th>
+                                    <th class="py-2 px-1">Seg. Pace</th>
+                                    <th class="py-2 px-1">Elapsed</th>
+                                    <th class="py-2 px-1">Aid Stop</th>
+                                    <th class="py-2 px-2 text-right">Buffer / Cutoff</th>
+                                </tr>
+                            </thead>
+                            <tbody id="targetTableBody" class="divide-y divide-ios-border/40 font-mono">
+                                <!-- Dynamic rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- COLUMN 2: REQUIRED MINIMUM PACE SCENARIO -->
+                <div id="colRequiredPace" class="bg-ios-card border border-ios-border rounded-2xl overflow-hidden shadow-xl flex flex-col lg:block">
+                    <!-- Column Header -->
+                    <div id="requiredHeader" class="p-4 border-b border-ios-border bg-gradient-to-b from-slate-800/50 to-transparent">
+                        <!-- Populated by JS -->
+                    </div>
+
+                    <!-- Chart / Table Breakdown -->
+                    <div class="p-3 flex-1 overflow-x-auto">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr class="text-slate-400 font-semibold border-b border-ios-border pb-2">
+                                    <th class="py-2 px-2" id="thUnitCol2">Mile/Lap</th>
+                                    <th class="py-2 px-1">Req. Pace</th>
+                                    <th class="py-2 px-1">Elapsed</th>
+                                    <th class="py-2 px-1">Aid Stop</th>
+                                    <th class="py-2 px-2 text-right">Cutoff Time</th>
+                                </tr>
+                            </thead>
+                            <tbody id="requiredTableBody" class="divide-y divide-ios-border/40 font-mono">
+                                <!-- Dynamic rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+    </main>
+
+    <!-- Auto-Space Generator Modal -->
+    <div id="presetModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-ios-card border border-ios-border rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-ios-border pb-3">
+                <h3 class="font-bold text-base text-white flex items-center gap-2">
+                    <i data-lucide="wand-2" class="w-5 h-5 text-ios-blue"></i>
+                    Auto-Space Aid Stations
+                </h3>
+                <button onclick="closePresetModal()" class="text-slate-400 hover:text-white p-1">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-medium text-slate-300 mb-1">Space stations every:</label>
+                    <div class="relative">
+                        <input type="number" id="genInterval" value="5" min="1" step="0.5" class="w-full bg-ios-subcard border border-ios-border rounded-xl px-3 py-2 text-white font-semibold">
+                        <span class="absolute right-3 top-2 text-slate-500 font-medium unitLabel">miles</span>
+                    </div>
+                </div>
+                <div>
+                    <label class="block font-medium text-slate-300 mb-1">Planned rest duration at each station:</label>
+                    <div class="relative">
+                        <input type="number" id="genRestMins" value="3" min="0" step="1" class="w-full bg-ios-subcard border border-ios-border rounded-xl px-3 py-2 text-white font-semibold">
+                        <span class="absolute right-3 top-2 text-slate-500 font-medium">minutes</span>
+                    </div>
+                </div>
+                <div class="bg-slate-900 p-3 rounded-xl border border-ios-border/60 text-slate-400 text-[11px]">
+                    Note: This will automatically generate stations evenly up to the total race distance.
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="closePresetModal()" class="px-4 py-2 rounded-xl bg-ios-subcard border border-ios-border text-slate-300 text-xs font-semibold">Cancel</button>
+                <button onclick="generateEvenAidStations()" class="px-4 py-2 rounded-xl bg-ios-blue hover:bg-blue-600 text-white text-xs font-semibold">Generate</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Logic Javascript -->
+    <script>
+        // State Management
+        let appState = {
+            unit: 'mi', // 'mi' or 'km'
+            raceMode: 'distance', // 'distance' or 'time'
+            mobileColumnView: 'target', // 'target' or 'required'
+            aidStations: [
+                { mile: 10, restMins: 3 },
+                { mile: 20, restMins: 5 },
+                { mile: 30, restMins: 5 },
+                { mile: 40, restMins: 7 },
+                { mile: 50, restMins: 10 },
+                { mile: 60, restMins: 5 },
+                { mile: 70, restMins: 8 },
+                { mile: 80, restMins: 10 },
+                { mile: 90, restMins: 5 }
+            ]
+        };
+
+        // Quick set for target distance goal in time mode
+        function setTargetDistGoal(val) {
+            document.getElementById('timeTargetDist').value = val > 0 ? val : '';
+            calculateRace();
+        }
+
+        // Initialize icons and initial data
+        window.onload = function() {
+            lucide.createIcons();
+            renderAidStationsInputs();
+            calculateRace();
+        };
+
+        // Unit Switcher
+        function setUnit(unit) {
+            appState.unit = unit;
+            
+            // Buttons UI
+            const miBtn = document.getElementById('unitMilesBtn');
+            const kmBtn = document.getElementById('unitKmBtn');
+
+            if (unit === 'mi') {
+                miBtn.className = "px-2.5 py-1 rounded-md font-medium transition-all bg-ios-blue text-white shadow-sm";
+                kmBtn.className = "px-2.5 py-1 rounded-md font-medium text-slate-400 hover:text-white transition-all";
+            } else {
+                kmBtn.className = "px-2.5 py-1 rounded-md font-medium transition-all bg-ios-blue text-white shadow-sm";
+                miBtn.className = "px-2.5 py-1 rounded-md font-medium text-slate-400 hover:text-white transition-all";
+            }
+
+            // Labels update
+            document.querySelectorAll('.unitLabel').forEach(el => el.textContent = unit === 'mi' ? 'miles' : 'km');
+            document.querySelectorAll('.unitSingleLabel').forEach(el => el.textContent = unit === 'mi' ? 'mile' : 'km');
+
+            calculateRace();
+        }
+
+        // Mode Switcher (Distance vs Time)
+        function setRaceMode(mode) {
+            appState.raceMode = mode;
+
+            const distBtn = document.getElementById('tabDistanceMode');
+            const timeBtn = document.getElementById('tabTimeMode');
+            const distInputs = document.getElementById('distanceInputs');
+            const timeInputs = document.getElementById('timeInputs');
+            const distPresets = document.getElementById('distancePresets');
+            const timePresets = document.getElementById('timePresets');
+
+            if (mode === 'distance') {
+                distBtn.className = "flex-1 py-2.5 text-xs sm:text-sm font-semibold rounded-xl transition-all duration-200 flex items-center justify-center gap-2 bg-ios-blue text-white shadow-md";
+                timeBtn.className = "flex-1 py-2.5 text-xs sm:text-sm font-semibold rounded-xl transition-all duration-200 flex items-center justify-center gap-2 text-slate-400 hover:text-white";
+                distInputs.classList.remove('hidden');
+                timeInputs.classList.add('hidden');
+                distPresets.classList.remove('hidden');
+                timePresets.classList.add('hidden');
+            } else {
+                timeBtn.className = "flex-1 py-2.5 text-xs sm:text-sm font-semibold rounded-xl transition-all duration-200 flex items-center justify-center gap-2 bg-ios-blue text-white shadow-md";
+                distBtn.className = "flex-1 py-2.5 text-xs sm:text-sm font-semibold rounded-xl transition-all duration-200 flex items-center justify-center gap-2 text-slate-400 hover:text-white";
+                timeInputs.classList.remove('hidden');
+                distInputs.classList.add('hidden');
+                timePresets.classList.remove('hidden');
+                distPresets.classList.add('hidden');
+            }
+
+            calculateRace();
+        }
+
+        // Mobile Column View Switcher
+        function setColumnView(view) {
+            appState.mobileColumnView = view;
+            const targetCol = document.getElementById('colTargetPace');
+            const reqCol = document.getElementById('colRequiredPace');
+            const tabTarget = document.getElementById('viewTabTarget');
+            const tabReq = document.getElementById('viewTabRequired');
+
+            if (view === 'target') {
+                targetCol.classList.remove('hidden');
+                reqCol.classList.add('hidden');
+                tabTarget.className = "px-3 py-1 rounded-lg bg-ios-blue text-white shadow";
+                tabReq.className = "px-3 py-1 rounded-lg text-slate-400";
+            } else {
+                reqCol.classList.remove('hidden');
+                targetCol.classList.add('hidden');
+                tabReq.className = "px-3 py-1 rounded-lg bg-ios-blue text-white shadow";
+                tabTarget.className = "px-3 py-1 rounded-lg text-slate-400";
+            }
+        }
+
+        // Preset Application
+        function applyPreset(presetKey) {
+            if (presetKey === '50k') {
+                setRaceMode('distance');
+                document.getElementById('distTotal').value = appState.unit === 'mi' ? 31.07 : 50;
+                document.getElementById('distCutoffHours').value = 9;
+                document.getElementById('distCutoffMins').value = 0;
+                document.getElementById('distPaceMin').value = 12;
+                document.getElementById('distPaceSec').value = 0;
+                autoGenerateStations(5, 3);
+            } else if (presetKey === '50m') {
+                setRaceMode('distance');
+                document.getElementById('distTotal').value = appState.unit === 'mi' ? 50 : 80.47;
+                document.getElementById('distCutoffHours').value = 13;
+                document.getElementById('distCutoffMins').value = 0;
+                document.getElementById('distPaceMin').value = 13;
+                document.getElementById('distPaceSec').value = 15;
+                autoGenerateStations(6, 4);
+            } else if (presetKey === '100k') {
+                setRaceMode('distance');
+                document.getElementById('distTotal').value = appState.unit === 'mi' ? 62.13 : 100;
+                document.getElementById('distCutoffHours').value = 18;
+                document.getElementById('distCutoffMins').value = 0;
+                document.getElementById('distPaceMin').value = 14;
+                document.getElementById('distPaceSec').value = 0;
+                autoGenerateStations(7, 5);
+            } else if (presetKey === '100m') {
+                setRaceMode('distance');
+                document.getElementById('distTotal').value = appState.unit === 'mi' ? 100 : 160.9;
+                document.getElementById('distCutoffHours').value = 30;
+                document.getElementById('distCutoffMins').value = 0;
+                document.getElementById('distPaceMin').value = 14;
+                document.getElementById('distPaceSec').value = 30;
+                autoGenerateStations(10, 5);
+            } else if (presetKey === '6h') {
+                setRaceMode('time');
+                document.getElementById('timeDurationHours').value = 6;
+                document.getElementById('timeLoopDist').value = appState.unit === 'mi' ? 2.5 : 4.0;
+                document.getElementById('timeLoopsPerStop').value = 2;
+                document.getElementById('timeRestMins').value = 4;
+                document.getElementById('timePaceMin').value = 9;
+                document.getElementById('timePaceSec').value = 30;
+            } else if (presetKey === '12h') {
+                setRaceMode('time');
+                document.getElementById('timeDurationHours').value = 12;
+                document.getElementById('timeLoopDist').value = appState.unit === 'mi' ? 3.0 : 5.0;
+                document.getElementById('timeLoopsPerStop').value = 2;
+                document.getElementById('timeRestMins').value = 5;
+                document.getElementById('timePaceMin').value = 10;
+                document.getElementById('timePaceSec').value = 45;
+            } else if (presetKey === '24h') {
+                setRaceMode('time');
+                document.getElementById('timeDurationHours').value = 24;
+                document.getElementById('timeLoopDist').value = appState.unit === 'mi' ? 1.2 : 2.0;
+                document.getElementById('timeLoopsPerStop').value = 3;
+                document.getElementById('timeRestMins').value = 6;
+                document.getElementById('timePaceMin').value = 12;
+                document.getElementById('timePaceSec').value = 15;
+            }
+            calculateRace();
+        }
+
+        // Render Dynamic Aid Station Inputs
+        function renderAidStationsInputs() {
+            const container = document.getElementById('aidStationsList');
+            container.innerHTML = '';
+
+            appState.aidStations.sort((a, b) => a.mile - b.mile);
+
+            if (appState.aidStations.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-4 text-xs text-slate-500 italic border border-dashed border-ios-border rounded-xl">
+                        No aid stations added. Use "Add Aid Station" or "Auto-Space Generator".
+                    </div>`;
+                return;
+            }
+
+            appState.aidStations.forEach((st, idx) => {
+                const row = document.createElement('div');
+                row.className = 'flex items-center gap-2 bg-ios-subcard/70 p-2 rounded-xl border border-ios-border/60 text-xs';
+                row.innerHTML = `
+                    <span class="text-slate-400 font-semibold w-6 text-center">#${idx + 1}</span>
+                    <div class="flex-1 flex items-center gap-1.5">
+                        <span class="text-slate-400 font-medium">At ${appState.unit}:</span>
+                        <input type="number" step="0.1" value="${st.mile}" onchange="updateAidStation(${idx}, 'mile', this.value)" class="w-20 bg-slate-900 border border-ios-border rounded-lg px-2 py-1 text-white font-semibold">
+                    </div>
+                    <div class="flex-1 flex items-center gap-1.5">
+                        <span class="text-slate-400 font-medium">Rest Mins:</span>
+                        <input type="number" step="1" value="${st.restMins}" onchange="updateAidStation(${idx}, 'restMins', this.value)" class="w-16 bg-slate-900 border border-ios-border rounded-lg px-2 py-1 text-white font-semibold">
+                    </div>
+                    <button onclick="removeAidStation(${idx})" class="p-1.5 text-slate-400 hover:text-ios-red transition">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
+                `;
+                container.appendChild(row);
+            });
+
+            lucide.createIcons();
+        }
+
+        function addAidStation() {
+            const lastMile = appState.aidStations.length > 0 ? appState.aidStations[appState.aidStations.length - 1].mile + 5 : 5;
+            appState.aidStations.push({ mile: lastMile, restMins: 5 });
+            renderAidStationsInputs();
+            calculateRace();
+        }
+
+        function removeAidStation(index) {
+            appState.aidStations.splice(index, 1);
+            renderAidStationsInputs();
+            calculateRace();
+        }
+
+        function updateAidStation(index, field, val) {
+            const num = parseFloat(val) || 0;
+            appState.aidStations[index][field] = num;
+            calculateRace();
+        }
+
+        // Generator Modal functions
+        function openPresetModal() {
+            document.getElementById('presetModal').classList.remove('hidden');
+        }
+
+        function closePresetModal() {
+            document.getElementById('presetModal').classList.add('hidden');
+        }
+
+        function generateEvenAidStations() {
+            const interval = parseFloat(document.getElementById('genInterval').value) || 5;
+            const rest = parseInt(document.getElementById('genRestMins').value) || 3;
+            autoGenerateStations(interval, rest);
+            closePresetModal();
+            calculateRace();
+        }
+
+        function autoGenerateStations(interval, rest) {
+            const total = parseFloat(document.getElementById('distTotal').value) || 100;
+            appState.aidStations = [];
+            for (let m = interval; m < total; m += interval) {
+                appState.aidStations.push({ mile: Math.round(m * 10) / 10, restMins: rest });
+            }
+            renderAidStationsInputs();
+        }
+
+        // Helper Time Formatting
+        function secondsToHMS(totalSec) {
+            if (isNaN(totalSec) || totalSec < 0) return "00:00:00";
+            const h = Math.floor(totalSec / 3600);
+            const m = Math.floor((totalSec % 3600) / 60);
+            const s = Math.floor(totalSec % 60);
+            return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+        }
+
+        function secondsToPace(secPerUnit) {
+            if (isNaN(secPerUnit) || secPerUnit <= 0) return "--:--";
+            const m = Math.floor(secPerUnit / 60);
+            const s = Math.round(secPerUnit % 60);
+            return `${m}:${String(s).padStart(2, '0')}`;
+        }
+
+        // MAIN CALCULATION ENGINE
+        function calculateRace() {
+            if (appState.raceMode === 'distance') {
+                calculateDistanceRace();
+            } else {
+                calculateTimeRace();
+            }
+            
+            // Adjust table column unit headers
+            const unitLabel = appState.unit === 'mi' ? 'Mile' : 'KM';
+            const lapOrMile = appState.raceMode === 'distance' ? unitLabel : 'Loop';
+            document.getElementById('thUnitCol1').innerText = `${lapOrMile} #`;
+            document.getElementById('thUnitCol2').innerText = `${lapOrMile} #`;
+        }
+
+        // -------------------------------------------------------------
+        // DISTANCE-BASED RACE COMPUTATION
+        // -------------------------------------------------------------
+        function calculateDistanceRace() {
+            const dist = parseFloat(document.getElementById('distTotal').value) || 0;
+            const cutoffH = parseInt(document.getElementById('distCutoffHours').value) || 0;
+            const cutoffM = parseInt(document.getElementById('distCutoffMins').value) || 0;
+            const cutoffSec = (cutoffH * 3600) + (cutoffM * 60);
+
+            const paceMin = parseInt(document.getElementById('distPaceMin').value) || 0;
+            const paceSec = parseInt(document.getElementById('distPaceSec').value) || 0;
+            const targetPaceSecPerUnit = (paceMin * 60) + paceSec;
+
+            // Sort Aid stations
+            const stations = [...appState.aidStations].sort((a, b) => a.mile - b.mile).filter(s => s.mile < dist);
+
+            // Calculate Total Planned Rest Time
+            const totalRestSec = stations.reduce((acc, s) => acc + (s.restMins * 60), 0);
+
+            // 1. Target Pace Calculations
+            const runningTimeTargetSec = dist * targetPaceSecPerUnit;
+            const totalFinishTimeTargetSec = runningTimeTargetSec + totalRestSec;
+            const targetOverallAvgPaceSec = totalFinishTimeTargetSec / dist;
+            const isTargetBusted = totalFinishTimeTargetSec > cutoffSec;
+
+            // 2. Required Minimum Pace Calculations (To hit cutoff exactly)
+            const availableRunningSec = cutoffSec - totalRestSec;
+            const reqPaceSecPerUnit = availableRunningSec > 0 ? (availableRunningSec / dist) : 0;
+            const reqOverallAvgPaceSec = cutoffSec / dist;
+
+            // Render Overview Top Card
+            renderOverviewBanner({
+                mode: 'distance',
+                cutoffSec,
+                targetFinishSec: totalFinishTimeTargetSec,
+                isBusted: isTargetBusted,
+                totalDistance: dist,
+                totalRestSec,
+                reqPaceSecPerUnit
+            });
+
+            // Render Target Column Header
+            document.getElementById('targetHeader').innerHTML = `
+                <div class="flex items-start justify-between">
+                    <div>
+                        <span class="text-[11px] font-bold tracking-wider uppercase text-ios-blue bg-blue-500/10 px-2 py-0.5 rounded-md border border-blue-500/20">Target Scenario</span>
+                        <h4 class="text-xl font-extrabold text-white mt-1.5 font-mono">${secondsToHMS(totalFinishTimeTargetSec)}</h4>
+                        <p class="text-xs text-slate-400 mt-0.5">Projected Finish Time</p>
+                    </div>
+                    <div class="text-right text-xs space-y-1 bg-slate-900/80 p-2.5 rounded-xl border border-ios-border/80">
+                        <div class="text-slate-300"><span class="text-slate-400">Watch Avg Pace:</span> <span class="font-bold text-ios-yellow font-mono text-sm">${secondsToPace(targetOverallAvgPaceSec)}</span> <span class="text-[10px] text-slate-500">/${appState.unit}</span></div>
+                        <div class="text-slate-300"><span class="text-slate-500">Moving Pace:</span> <span class="font-semibold text-white font-mono">${secondsToPace(targetPaceSecPerUnit)}</span> /${appState.unit}</div>
+                        <div class="text-slate-300"><span class="text-slate-500">Total Rest:</span> <span class="font-semibold text-ios-yellow font-mono">${Math.round(totalRestSec/60)} mins</span></div>
+                    </div>
+                </div>
+            `;
+
+            // Render Required Column Header
+            document.getElementById('requiredHeader').innerHTML = `
+                <div class="flex items-start justify-between">
+                    <div>
+                        <span class="text-[11px] font-bold tracking-wider uppercase text-ios-green bg-green-500/10 px-2 py-0.5 rounded-md border border-green-500/20">Minimum Pace Required</span>
+                        <h4 class="text-xl font-extrabold text-white mt-1.5 font-mono">${secondsToPace(reqPaceSecPerUnit)} <span class="text-xs text-slate-400 font-sans font-normal">/${appState.unit}</span></h4>
+                        <p class="text-xs text-slate-400 mt-0.5">Max Pace to Beat Cutoff (${secondsToHMS(cutoffSec)})</p>
+                    </div>
+                    <div class="text-right text-xs space-y-1 bg-slate-900/80 p-2.5 rounded-xl border border-ios-border/80">
+                        <div class="text-slate-300"><span class="text-slate-400">Watch Avg Limit:</span> <span class="font-bold text-ios-yellow font-mono text-sm">${secondsToPace(reqOverallAvgPaceSec)}</span> <span class="text-[10px] text-slate-500">/${appState.unit}</span></div>
+                        <div class="text-slate-300"><span class="text-slate-500">Req. Run Pace:</span> <span class="font-semibold text-ios-green font-mono">${secondsToPace(reqPaceSecPerUnit)}</span> /${appState.unit}</div>
+                        <div class="text-slate-300"><span class="text-slate-500">Rest Allowance:</span> <span class="font-semibold text-ios-yellow font-mono">${Math.round(totalRestSec/60)} mins</span></div>
+                    </div>
+                </div>
+            `;
+
+            // Build Tables
+            buildDistanceTable('targetTableBody', dist, targetPaceSecPerUnit, stations, cutoffSec, true);
+            buildDistanceTable('requiredTableBody', dist, reqPaceSecPerUnit, stations, cutoffSec, false);
+        }
+
+        function buildDistanceTable(tableId, totalDist, paceSec, stations, cutoffSec, isTargetTable) {
+            const tbody = document.getElementById(tableId);
+            tbody.innerHTML = '';
+
+            let elapsedSec = 0;
+            const integerUnits = Math.floor(totalDist);
+            const partialUnit = totalDist - integerUnits;
+
+            let stationIndex = 0;
+
+            for (let i = 1; i <= Math.ceil(totalDist); i++) {
+                const currentDist = (i === Math.ceil(totalDist) && partialUnit > 0) ? totalDist : i;
+                const segDistance = (i === Math.ceil(totalDist) && partialUnit > 0) ? partialUnit : 1;
+
+                // Run segment time
+                const segRunSec = segDistance * paceSec;
+                elapsedSec += segRunSec;
+
+                // Check for aid stations in this interval (e.g. between i-1 and i)
+                let aidDurationSec = 0;
+                let aidLabel = '';
+
+                while (stationIndex < stations.length && stations[stationIndex].mile <= currentDist) {
+                    const st = stations[stationIndex];
+                    aidDurationSec += st.restMins * 60;
+                    aidLabel += `AS (${st.restMins}m) `;
+                    stationIndex++;
+                }
+
+                elapsedSec += aidDurationSec;
+
+                const isBusted = elapsedSec > cutoffSec;
+                const bufferSec = cutoffSec - elapsedSec;
+
+                const tr = document.createElement('tr');
+                
+                // Highlight row if cutoff is busted in target table
+                if (isTargetTable && isBusted) {
+                    tr.className = "bg-ios-red/20 text-red-200 border-b border-ios-red/40 font-semibold";
+                } else {
+                    tr.className = "hover:bg-ios-subcard/50 border-b border-ios-border/40 text-slate-300";
+                }
+
+                tr.innerHTML = `
+                    <td class="py-2 px-2 font-bold">${currentDist.toFixed(1)}</td>
+                    <td class="py-2 px-1">${secondsToPace(paceSec)}</td>
+                    <td class="py-2 px-1 font-semibold ${isBusted && isTargetTable ? 'text-ios-red' : 'text-slate-100'}">${secondsToHMS(elapsedSec)}</td>
+                    <td class="py-2 px-1">${aidDurationSec > 0 ? `<span class="px-1.5 py-0.5 rounded bg-ios-yellow/20 text-ios-yellow text-[10px] font-sans font-semibold">${aidLabel}</span>` : '<span class="text-slate-600">-</span>'}</td>
+                    <td class="py-2 px-2 text-right">
+                        ${isBusted ? 
+                            `<span class="text-ios-red font-bold flex items-center justify-end gap-1"><i data-lucide="alert-triangle" class="w-3 h-3"></i> +${secondsToHMS(-bufferSec)}</span>` : 
+                            `<span class="text-ios-green">+${secondsToHMS(bufferSec)}</span>`
+                        }
+                    </td>
+                `;
+
+                tbody.appendChild(tr);
+            }
+
+            lucide.createIcons();
+        }
+
+        // -------------------------------------------------------------
+        // TIME-BASED RACE COMPUTATION (LOOP/TIMED EVENT)
+        // -------------------------------------------------------------
+        function calculateTimeRace() {
+            const durationHours = parseFloat(document.getElementById('timeDurationHours').value) || 0;
+            const cutoffSec = durationHours * 3600;
+            const loopDist = parseFloat(document.getElementById('timeLoopDist').value) || 1;
+            const loopsPerStop = parseInt(document.getElementById('timeLoopsPerStop').value) || 1;
+            const restMins = parseFloat(document.getElementById('timeRestMins').value) || 0;
+            const restSecPerStop = restMins * 60;
+
+            const paceMin = parseInt(document.getElementById('timePaceMin').value) || 0;
+            const paceSec = parseInt(document.getElementById('timePaceSec').value) || 0;
+            const targetPaceSec = (paceMin * 60) + paceSec;
+
+            const targetGoalInput = parseFloat(document.getElementById('timeTargetDist').value) || 0;
+
+            // Single loop running time
+            const loopRunTimeSec = loopDist * targetPaceSec;
+
+            // Target Simulation: Run as many full loops as possible within cutoff time
+            let targetElapsedSec = 0;
+            let targetLoopCount = 0;
+            let targetRestSecTotal = 0;
+
+            while (true) {
+                let nextLoopSec = loopRunTimeSec;
+                let isRestLoop = ((targetLoopCount + 1) % loopsPerStop === 0);
+                let nextRestSec = isRestLoop ? restSecPerStop : 0;
+
+                if (targetElapsedSec + nextLoopSec + nextRestSec <= cutoffSec) {
+                    targetElapsedSec += nextLoopSec + nextRestSec;
+                    targetRestSecTotal += nextRestSec;
+                    targetLoopCount++;
+                } else {
+                    if (targetElapsedSec + nextLoopSec <= cutoffSec) {
+                        targetElapsedSec += nextLoopSec;
+                        targetLoopCount++;
+                    }
+                    break;
+                }
+            }
+
+            const targetTotalDist = targetLoopCount * loopDist;
+            const targetOverallAvgPace = targetTotalDist > 0 ? (cutoffSec / targetTotalDist) : 0;
+
+            // Target Distance Analysis (if targetGoalInput provided)
+            let reqLapsForGoal = 0;
+            let achievableGoalDist = 0;
+            let timeToAchieveGoalSec = 0;
+            let reqPaceForGoalSec = 0;
+            let isGoalAchievedInTime = false;
+
+            if (targetGoalInput > 0) {
+                reqLapsForGoal = Math.ceil(targetGoalInput / loopDist);
+                achievableGoalDist = reqLapsForGoal * loopDist;
+
+                // Time to reach achievable goal at target pace
+                const goalRestStops = Math.floor((reqLapsForGoal - 1) / loopsPerStop);
+                const goalRestSecTotal = goalRestStops * restSecPerStop;
+                timeToAchieveGoalSec = (reqLapsForGoal * loopRunTimeSec) + goalRestSecTotal;
+                isGoalAchievedInTime = timeToAchieveGoalSec <= cutoffSec;
+
+                // Required running pace to hit achievable goal distance exactly within time cutoff
+                const availRunSecForGoal = cutoffSec - goalRestSecTotal;
+                reqPaceForGoalSec = availRunSecForGoal > 0 ? (availRunSecForGoal / achievableGoalDist) : 0;
+            }
+
+            // Overview Banner
+            renderOverviewBanner({
+                mode: 'time',
+                cutoffSec,
+                targetFinishSec: targetElapsedSec,
+                isBusted: targetGoalInput > 0 ? !isGoalAchievedInTime : false,
+                totalDistance: targetTotalDist,
+                totalRestSec: targetRestSecTotal,
+                reqPaceSecPerUnit: reqPaceForGoalSec,
+                targetGoalInput,
+                reqLapsForGoal,
+                achievableGoalDist,
+                timeToAchieveGoalSec
+            });
+
+            // Target Column Header
+            document.getElementById('targetHeader').innerHTML = `
+                <div class="flex items-start justify-between">
+                    <div>
+                        <span class="text-[11px] font-bold tracking-wider uppercase text-ios-blue bg-blue-500/10 px-2 py-0.5 rounded-md border border-blue-500/20">Target Pace Outcome</span>
+                        <h4 class="text-xl font-extrabold text-white mt-1.5 font-mono">${targetTotalDist.toFixed(2)} <span class="text-xs text-slate-400 font-sans">${appState.unit}</span></h4>
+                        <p class="text-xs text-slate-400 mt-0.5">Projected Distance in ${durationHours} Hours (${targetLoopCount} Loops)</p>
+                    </div>
+                    <div class="text-right text-xs space-y-1 bg-slate-900/80 p-2.5 rounded-xl border border-ios-border/80">
+                        <div class="text-slate-300"><span class="text-slate-400">Watch Avg Pace:</span> <span class="font-bold text-ios-yellow font-mono text-sm">${secondsToPace(targetOverallAvgPace)}</span> <span class="text-[10px] text-slate-500">/${appState.unit}</span></div>
+                        <div class="text-slate-300"><span class="text-slate-500">Moving Pace:</span> <span class="font-semibold text-white font-mono">${secondsToPace(targetPaceSec)}</span> /${appState.unit}</div>
+                        <div class="text-slate-300"><span class="text-slate-500">Rest Stops:</span> <span class="font-semibold text-ios-yellow font-mono">${Math.round(targetRestSecTotal/60)} mins</span></div>
+                    </div>
+                </div>
+            `;
+
+            // Second Column: Benchmark / Required Pace Header
+            if (targetGoalInput > 0) {
+                const reqGoalOverallAvgPaceSec = cutoffSec / achievableGoalDist;
+                document.getElementById('requiredHeader').innerHTML = `
+                    <div class="flex items-start justify-between">
+                        <div>
+                            <span class="text-[11px] font-bold tracking-wider uppercase text-ios-green bg-green-500/10 px-2 py-0.5 rounded-md border border-green-500/20">Target Goal (${targetGoalInput} ${appState.unit})</span>
+                            <h4 class="text-xl font-extrabold text-white mt-1.5 font-mono">${achievableGoalDist.toFixed(2)} <span class="text-xs text-slate-400 font-sans">${appState.unit}</span></h4>
+                            <p class="text-xs text-slate-400 mt-0.5">${reqLapsForGoal} Full Laps Needed</p>
+                        </div>
+                        <div class="text-right text-xs space-y-1 bg-slate-900/80 p-2.5 rounded-xl border border-ios-border/80">
+                            <div class="text-slate-300"><span class="text-slate-400">Watch Avg Limit:</span> <span class="font-bold text-ios-yellow font-mono text-sm">${secondsToPace(reqGoalOverallAvgPaceSec)}</span> <span class="text-[10px] text-slate-500">/${appState.unit}</span></div>
+                            <div class="text-slate-300"><span class="text-slate-500">Req. Run Pace:</span> <span class="font-semibold text-ios-green font-mono">${secondsToPace(reqPaceForGoalSec)}</span> /${appState.unit}</div>
+                            <div class="text-slate-300"><span class="text-slate-500">Time Needed:</span> <span class="font-semibold text-white font-mono">${secondsToHMS(timeToAchieveGoalSec)}</span></div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                // Default benchmark (+2 loops)
+                const benchmarkLoops = targetLoopCount + 2;
+                const benchmarkDist = benchmarkLoops * loopDist;
+                const totalStopsInBenchmark = Math.floor(benchmarkLoops / loopsPerStop);
+                const benchmarkRestSec = totalStopsInBenchmark * restSecPerStop;
+                const availableBenchmarkRunSec = cutoffSec - benchmarkRestSec;
+                const reqPaceForBenchmark = availableBenchmarkRunSec > 0 ? (availableBenchmarkRunSec / benchmarkDist) : 0;
+                const benchmarkOverallAvgPace = cutoffSec / benchmarkDist;
+
+                document.getElementById('requiredHeader').innerHTML = `
+                    <div class="flex items-start justify-between">
+                        <div>
+                            <span class="text-[11px] font-bold tracking-wider uppercase text-ios-green bg-green-500/10 px-2 py-0.5 rounded-md border border-green-500/20">Stretch Target (+2 Loops)</span>
+                            <h4 class="text-xl font-extrabold text-white mt-1.5 font-mono">${benchmarkDist.toFixed(2)} <span class="text-xs text-slate-400 font-sans">${appState.unit}</span></h4>
+                            <p class="text-xs text-slate-400 mt-0.5">Stretch Goal Benchmark</p>
+                        </div>
+                        <div class="text-right text-xs space-y-1 bg-slate-900/80 p-2.5 rounded-xl border border-ios-border/80">
+                            <div class="text-slate-300"><span class="text-slate-400">Watch Avg Limit:</span> <span class="font-bold text-ios-yellow font-mono text-sm">${secondsToPace(benchmarkOverallAvgPace)}</span> <span class="text-[10px] text-slate-500">/${appState.unit}</span></div>
+                            <div class="text-slate-300"><span class="text-slate-500">Req. Run Pace:</span> <span class="font-semibold text-white font-mono">${secondsToPace(reqPaceForBenchmark)}</span> /${appState.unit}</div>
+                            <div class="text-slate-300"><span class="text-slate-500">Target Loops:</span> <span class="font-semibold text-white font-mono">${benchmarkLoops}</span></div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Build Tables
+            buildTimeTable('targetTableBody', cutoffSec, loopDist, loopsPerStop, restSecPerStop, targetPaceSec, reqLapsForGoal);
+            
+            const reqPaceForTable = (targetGoalInput > 0) ? reqPaceForGoalSec : ((cutoffSec - ((targetLoopCount + 2) * restSecPerStop)) / ((targetLoopCount + 2) * loopDist));
+            buildTimeTable('requiredTableBody', cutoffSec, loopDist, loopsPerStop, restSecPerStop, reqPaceForTable, reqLapsForGoal);
+        }
+
+        function buildTimeTable(tableId, cutoffSec, loopDist, loopsPerStop, restSecPerStop, paceSec, targetGoalLap = 0) {
+            const tbody = document.getElementById(tableId);
+            tbody.innerHTML = '';
+
+            let elapsedSec = 0;
+            let loopNum = 1;
+            const loopRunTimeSec = loopDist * paceSec;
+
+            while (elapsedSec + loopRunTimeSec <= cutoffSec + 3600) { // Render slightly past cutoff for complete picture
+                const currentDist = loopNum * loopDist;
+                elapsedSec += loopRunTimeSec;
+
+                let isRestStop = (loopNum % loopsPerStop === 0);
+                let restDurationSec = 0;
+
+                if (isRestStop && (elapsedSec + restSecPerStop <= cutoffSec + 3600)) {
+                    restDurationSec = restSecPerStop;
+                }
+
+                elapsedSec += restDurationSec;
+                const isPastCutoff = elapsedSec > cutoffSec;
+                const isGoalMilestone = targetGoalLap > 0 && loopNum === targetGoalLap;
+
+                const tr = document.createElement('tr');
+
+                if (isPastCutoff) {
+                    tr.className = "bg-ios-red/15 text-red-300 border-b border-ios-red/30 font-semibold";
+                } else if (isGoalMilestone) {
+                    tr.className = "bg-ios-green/20 text-emerald-200 border-b border-ios-green/40 font-bold";
+                } else {
+                    tr.className = "hover:bg-ios-subcard/50 border-b border-ios-border/40 text-slate-300";
+                }
+
+                tr.innerHTML = `
+                    <td class="py-2 px-2 font-bold">
+                        ${loopNum} <span class="text-[10px] text-slate-400 font-sans">(${currentDist.toFixed(1)} ${appState.unit})</span>
+                        ${isGoalMilestone ? `<span class="ml-1.5 px-1.5 py-0.5 rounded bg-ios-green/30 text-ios-green text-[9px] uppercase font-sans tracking-wide">Goal Met</span>` : ''}
+                    </td>
+                    <td class="py-2 px-1">${secondsToPace(paceSec)}</td>
+                    <td class="py-2 px-1 font-semibold ${isPastCutoff ? 'text-ios-red' : 'text-slate-100'}">${secondsToHMS(elapsedSec)}</td>
+                    <td class="py-2 px-1">${restDurationSec > 0 ? `<span class="px-1.5 py-0.5 rounded bg-ios-yellow/20 text-ios-yellow text-[10px] font-sans font-semibold">${Math.round(restDurationSec/60)}m stop</span>` : '<span class="text-slate-600">-</span>'}</td>
+                    <td class="py-2 px-2 text-right text-xs">
+                        ${isPastCutoff ? `<span class="text-ios-red">+${secondsToHMS(elapsedSec - cutoffSec)} over</span>` : `<span class="text-slate-400">${secondsToHMS(cutoffSec - elapsedSec)} left</span>`}
+                    </td>
+                `;
+
+                tbody.appendChild(tr);
+                loopNum++;
+
+                if (loopNum > 150) break; // Safety cap
+            }
+        }
+
+        // -------------------------------------------------------------
+        // VISUAL OVERVIEW BANNER & WARNINGS
+        // -------------------------------------------------------------
+        function renderOverviewBanner(data) {
+            const card = document.getElementById('overviewCard');
+
+            if (data.mode === 'distance') {
+                const pct = Math.min(100, Math.round((data.targetFinishSec / data.cutoffSec) * 100));
+
+                if (data.isBusted) {
+                    card.className = "bg-gradient-to-r from-red-950/80 via-ios-card to-ios-card border border-ios-red/50 rounded-2xl p-4 sm:p-5 shadow-xl relative overflow-hidden";
+                    card.innerHTML = `
+                        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                            <div class="flex items-center gap-3">
+                                <div class="w-12 h-12 rounded-2xl bg-ios-red/20 border border-ios-red/40 flex items-center justify-center shrink-0 text-ios-red shadow-lg">
+                                    <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+                                </div>
+                                <div>
+                                    <h3 class="text-base font-bold text-white flex items-center gap-2">
+                                        Cutoff Warning: Target Pace Exceeds Limit!
+                                    </h3>
+                                    <p class="text-xs text-red-300/80 mt-0.5">
+                                        Projected finish (${secondsToHMS(data.targetFinishSec)}) exceeds cutoff limit (${secondsToHMS(data.cutoffSec)}) by <span class="font-bold text-ios-red">${secondsToHMS(data.targetFinishSec - data.cutoffSec)}</span>.
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="w-full sm:w-auto text-right bg-slate-900/60 p-3 rounded-xl border border-ios-border">
+                                <div class="text-[11px] text-slate-400 font-medium">Required Pace to Finish</div>
+                                <div class="text-lg font-bold font-mono text-ios-green">${secondsToPace(data.reqPaceSecPerUnit)} /${appState.unit}</div>
+                            </div>
+                        </div>
+                        <!-- Progress Bar -->
+                        <div class="mt-4">
+                            <div class="flex justify-between text-[11px] font-semibold text-slate-400 mb-1">
+                                <span>Target Time vs Cutoff</span>
+                                <span class="text-ios-red">${pct}% of Cutoff</span>
+                            </div>
+                            <div class="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
+                                <div class="bg-gradient-to-r from-orange-500 to-ios-red h-full rounded-full" style="width: ${pct}%"></div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    const bufferSec = data.cutoffSec - data.targetFinishSec;
+                    card.className = "bg-gradient-to-r from-emerald-950/40 via-ios-card to-ios-card border border-ios-green/30 rounded-2xl p-4 sm:p-5 shadow-xl relative overflow-hidden";
+                    card.innerHTML = `
+                        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                            <div class="flex items-center gap-3">
+                                <div class="w-12 h-12 rounded-2xl bg-ios-green/20 border border-ios-green/40 flex items-center justify-center shrink-0 text-ios-green shadow-lg">
+                                    <i data-lucide="check-circle-2" class="w-6 h-6"></i>
+                                </div>
+                                <div>
+                                    <h3 class="text-base font-bold text-white flex items-center gap-2">
+                                        On Track! Cutoff Buffer Available
+                                    </h3>
+                                    <p class="text-xs text-emerald-300/80 mt-0.5">
+                                        Target pace achieves finish in <span class="font-bold text-white font-mono">${secondsToHMS(data.targetFinishSec)}</span>, leaving a cushion of <span class="font-bold text-ios-green font-mono">${secondsToHMS(bufferSec)}</span>.
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="w-full sm:w-auto text-right bg-slate-900/60 p-3 rounded-xl border border-ios-border">
+                                <div class="text-[11px] text-slate-400 font-medium">Cutoff Margin</div>
+                                <div class="text-lg font-bold font-mono text-ios-green">+${secondsToHMS(bufferSec)}</div>
+                            </div>
+                        </div>
+                        <!-- Progress Bar -->
+                        <div class="mt-4">
+                            <div class="flex justify-between text-[11px] font-semibold text-slate-400 mb-1">
+                                <span>Target Time vs Cutoff</span>
+                                <span class="text-ios-green">${pct}% of Cutoff</span>
+                            </div>
+                            <div class="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
+                                <div class="bg-gradient-to-r from-ios-blue to-ios-green h-full rounded-full" style="width: ${pct}%"></div>
+                            </div>
+                        </div>
+                    `;
+                }
+            } else {
+                // Time mode overview
+                if (data.targetGoalInput > 0) {
+                    if (data.isBusted) {
+                        card.className = "bg-gradient-to-r from-red-950/80 via-ios-card to-ios-card border border-ios-red/50 rounded-2xl p-4 sm:p-5 shadow-xl relative overflow-hidden";
+                        card.innerHTML = `
+                            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-12 h-12 rounded-2xl bg-ios-red/20 border border-ios-red/40 flex items-center justify-center shrink-0 text-ios-red shadow-lg">
+                                        <i data-lucide="alert-circle" class="w-6 h-6"></i>
+                                    </div>
+                                    <div>
+                                        <h3 class="text-base font-bold text-white flex items-center gap-2">
+                                            Target Goal Unreachable at Current Pace
+                                        </h3>
+                                        <p class="text-xs text-red-300/80 mt-0.5">
+                                            Reaching <span class="font-bold text-white">${data.achievableGoalDist.toFixed(1)} ${appState.unit}</span> (${data.reqLapsForGoal} laps) takes <span class="font-bold font-mono text-white">${secondsToHMS(data.timeToAchieveGoalSec)}</span>, exceeding the time cap by <span class="font-bold text-ios-red font-mono">${secondsToHMS(data.timeToAchieveGoalSec - data.cutoffSec)}</span>.
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="w-full sm:w-auto text-right bg-slate-900/60 p-3 rounded-xl border border-ios-border">
+                                    <div class="text-[11px] text-slate-400 font-medium">Req Pace for Goal</div>
+                                    <div class="text-lg font-bold font-mono text-ios-green">${secondsToPace(data.reqPaceSecPerUnit)} /${appState.unit}</div>
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        const bufferSec = data.cutoffSec - data.timeToAchieveGoalSec;
+                        card.className = "bg-gradient-to-r from-emerald-950/40 via-ios-card to-ios-card border border-ios-green/30 rounded-2xl p-4 sm:p-5 shadow-xl relative overflow-hidden";
+                        card.innerHTML = `
+                            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-12 h-12 rounded-2xl bg-ios-green/20 border border-ios-green/40 flex items-center justify-center shrink-0 text-ios-green shadow-lg">
+                                        <i data-lucide="trophy" class="w-6 h-6"></i>
+                                    </div>
+                                    <div>
+                                        <h3 class="text-base font-bold text-white flex items-center gap-2">
+                                            Target Goal Achievable!
+                                        </h3>
+                                        <p class="text-xs text-emerald-300/80 mt-0.5">
+                                            You will hit <span class="font-bold text-white">${data.achievableGoalDist.toFixed(1)} ${appState.unit}</span> (${data.reqLapsForGoal} laps) in <span class="font-bold font-mono text-white">${secondsToHMS(data.timeToAchieveGoalSec)}</span> with <span class="font-bold text-ios-green font-mono">${secondsToHMS(bufferSec)}</span> remaining before time cap.
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="w-full sm:w-auto text-right bg-slate-900/60 p-3 rounded-xl border border-ios-border">
+                                    <div class="text-[11px] text-slate-400 font-medium">Target Met Cushion</div>
+                                    <div class="text-lg font-bold font-mono text-ios-green">+${secondsToHMS(bufferSec)}</div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                } else {
+                    card.className = "bg-gradient-to-r from-blue-950/40 via-ios-card to-ios-card border border-ios-blue/30 rounded-2xl p-4 sm:p-5 shadow-xl relative overflow-hidden";
+                    card.innerHTML = `
+                        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                            <div class="flex items-center gap-3">
+                                <div class="w-12 h-12 rounded-2xl bg-ios-blue/20 border border-ios-blue/40 flex items-center justify-center shrink-0 text-ios-blue shadow-lg">
+                                    <i data-lucide="flag" class="w-6 h-6"></i>
+                                </div>
+                                <div>
+                                    <h3 class="text-base font-bold text-white flex items-center gap-2">
+                                        Timed Event Projection
+                                    </h3>
+                                    <p class="text-xs text-slate-300 mt-0.5">
+                                        Total projected distance: <span class="font-bold text-ios-blue font-mono">${data.totalDistance.toFixed(2)} ${appState.unit}</span> over ${secondsToHMS(data.cutoffSec)}.
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="w-full sm:w-auto text-right bg-slate-900/60 p-3 rounded-xl border border-ios-border">
+                                <div class="text-[11px] text-slate-400 font-medium">Planned Rest Time</div>
+                                <div class="text-lg font-bold font-mono text-ios-yellow">${Math.round(data.totalRestSec/60)} mins</div>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+
+            lucide.createIcons();
+        }
+    </script>
+</body>
+</html>
